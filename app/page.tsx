@@ -1,57 +1,54 @@
 "use client"
 
 import { useState } from "react"
-import { SwipeableCard } from "@/components/swipeable-card"
-import { CommentDialog } from "@/components/comment-dialog"
+import { UserProfileCard } from "@/components/user-profile-card"
 import { BottomNav } from "@/components/bottom-nav"
-import { mockMemes, type Meme } from "@/lib/mock-data"
-import { Flame } from "lucide-react"
+import { mockUserProfiles, type UserProfile } from "@/lib/mock-data"
+import { Flame, Heart, X } from "lucide-react"
 
 export default function FeedPage() {
-  const [memes, setMemes] = useState<Meme[]>(mockMemes)
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [selectedMeme, setSelectedMeme] = useState<Meme | null>(null)
-  const [commentDialogOpen, setCommentDialogOpen] = useState(false)
+  const [userProfiles, setUserProfiles] = useState<UserProfile[]>(mockUserProfiles)
+  const [currentUserIndex, setCurrentUserIndex] = useState(0)
+  const [likeCount, setLikeCount] = useState(0)
+  const [rejectCount, setRejectCount] = useState(0)
+  const [showAnimation, setShowAnimation] = useState<"like" | "reject" | null>(null)
 
-  const currentMeme = memes[currentIndex]
-  const nextMeme = memes[currentIndex + 1]
+  const currentUserProfile = userProfiles[currentUserIndex]
+  const nextUserProfile = userProfiles[currentUserIndex + 1]
 
   const handleSwipe = (direction: "left" | "right") => {
-    console.log("[v0] Swiped:", direction, "on meme:", currentMeme.id)
-
     if (direction === "right") {
-      console.log("[v0] Liked meme:", currentMeme.id)
-      setMemes((prevMemes) =>
-        prevMemes.map((meme) => (meme.id === currentMeme.id ? { ...meme, likes: meme.likes + 1 } : meme)),
-      )
+      setLikeCount((prev) => prev + 1)
+      setShowAnimation("like")
     } else {
-      console.log("[v0] Disliked meme:", currentMeme.id)
+      setRejectCount((prev) => prev + 1)
+      setShowAnimation("reject")
     }
 
-    // Move to next meme
-    if (currentIndex < memes.length - 1) {
-      setCurrentIndex(currentIndex + 1)
-    } else {
-      // Reset to beginning when reaching the end
-      setCurrentIndex(0)
-    }
-  }
+    // Clear animation after delay
+    setTimeout(() => setShowAnimation(null), 800)
 
-  const handleComment = () => {
-    setSelectedMeme(currentMeme)
-    setCommentDialogOpen(true)
+    // Move to next user profile
+    if (currentUserIndex < userProfiles.length - 1) {
+      setCurrentUserIndex(currentUserIndex + 1)
+    } else {
+      setCurrentUserIndex(0)
+    }
   }
 
   const handleCommentAdded = (memeId: string, updatedComments: any[]) => {
-    setMemes((prevMemes) =>
-      prevMemes.map((meme) => (meme.id === memeId ? { ...meme, comments: updatedComments } : meme)),
+    setUserProfiles((prevProfiles) =>
+      prevProfiles.map((profile) => ({
+        ...profile,
+        memes: profile.memes.map((meme) => (meme.id === memeId ? { ...meme, comments: updatedComments } : meme)),
+      })),
     )
   }
 
-  if (!currentMeme) {
+  if (!currentUserProfile) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">No more memes to show!</p>
+        <p className="text-muted-foreground">No more profiles to show!</p>
       </div>
     )
   }
@@ -59,49 +56,63 @@ export default function FeedPage() {
   return (
     <main className="min-h-screen bg-background pb-20">
       <header className="sticky top-0 z-40 bg-card/80 backdrop-blur-lg border-b border-border">
-        <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-center">
+        <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Flame className="h-6 w-6 text-accent" />
             <h1 className="text-xl font-bold">MemeSwipe</h1>
+          </div>
+          <div className="flex items-center gap-4 text-sm">
+            <div className="flex items-center gap-1.5 bg-red-500/10 px-3 py-1.5 rounded-full">
+              <Heart className="h-4 w-4 text-red-500 fill-red-500" />
+              <span className="font-semibold text-red-500">{likeCount}</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-gray-500/10 px-3 py-1.5 rounded-full">
+              <X className="h-4 w-4 text-gray-500" />
+              <span className="font-semibold text-gray-500">{rejectCount}</span>
+            </div>
           </div>
         </div>
       </header>
 
       <div className="max-w-md mx-auto px-4 py-8">
         <div className="relative h-[600px]">
-          {/* Next card in background */}
-          {nextMeme && (
+          {/* Next user profile in background */}
+          {nextUserProfile && (
             <div className="absolute inset-0 flex items-center justify-center">
-              <SwipeableCard
-                key={`next-${nextMeme.id}`}
-                meme={nextMeme}
-                onSwipe={() => {}}
-                onComment={() => {}}
-                isInteractive={false}
-                className="opacity-50 scale-95"
-              />
+              <div className="w-full h-full opacity-50 scale-95 transition-all">
+                <UserProfileCard userProfile={nextUserProfile} onSwipe={() => {}} onCommentAdded={() => {}} />
+              </div>
             </div>
           )}
 
-          {/* Current card on top */}
+          {/* Current user profile */}
           <div className="absolute inset-0 flex items-center justify-center">
-            <SwipeableCard
-              key={currentMeme.id}
-              meme={currentMeme}
+            <UserProfileCard
+              userProfile={currentUserProfile}
               onSwipe={handleSwipe}
-              onComment={handleComment}
-              isInteractive={true}
+              onCommentAdded={handleCommentAdded}
             />
           </div>
+
+          {/* Like Animation */}
+          {showAnimation === "like" && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50 animate-in zoom-in-50 fade-in duration-300">
+              <div className="bg-red-500 text-white rounded-full p-12 shadow-2xl animate-pulse">
+                <Heart className="h-24 w-24 fill-current" />
+              </div>
+            </div>
+          )}
+
+          {/* Reject Animation */}
+          {showAnimation === "reject" && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50 animate-in zoom-in-50 fade-in duration-300">
+              <div className="bg-gray-500 text-white rounded-full p-12 shadow-2xl animate-pulse">
+                <X className="h-24 w-24 stroke-[3]" />
+              </div>
+            </div>
+          )}
         </div>
       </div>
-
-      <CommentDialog
-        meme={selectedMeme}
-        open={commentDialogOpen}
-        onOpenChange={setCommentDialogOpen}
-        onCommentAdded={handleCommentAdded}
-      />
 
       <BottomNav />
     </main>

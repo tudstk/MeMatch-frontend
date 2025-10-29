@@ -35,8 +35,8 @@ export function MemeCard({ meme, onLike, onDislike, onComment, style, className 
       <div className="relative aspect-[3/4] bg-muted">
         <Image src={meme.imageUrl || "/placeholder.svg"} alt={meme.caption} fill className="object-cover" />
         {isLiked && (
-          <div className="absolute inset-0 flex items-center justify-center bg-primary/20 animate-in fade-in zoom-in duration-300">
-            <Heart className="h-32 w-32 text-accent fill-accent" />
+          <div className="absolute inset-0 flex items-center justify-center bg-red-500/20 animate-in fade-in zoom-in duration-300">
+            <Heart className="h-32 w-32 text-red-500 fill-red-500" />
           </div>
         )}
       </div>
@@ -63,22 +63,31 @@ export function MemeCard({ meme, onLike, onDislike, onComment, style, className 
           </div>
         </div>
       </div>
-      <div className="absolute bottom-40 left-0 right-0 flex items-center justify-center gap-6 p-4">
-        <Button size="lg" variant="destructive" className="h-16 w-16 rounded-full shadow-lg" onClick={onDislike}>
-          <X className="h-8 w-8" />
-        </Button>
-        <Button
-          size="lg"
-          variant="default"
-          className="h-16 w-16 rounded-full shadow-lg bg-accent hover:bg-accent/90"
-          onClick={handleLike}
-        >
-          <Heart className="h-8 w-8" />
-        </Button>
-        <Button size="lg" variant="secondary" className="h-14 w-14 rounded-full shadow-lg" onClick={onComment}>
-          <MessageCircle className="h-6 w-6" />
-        </Button>
-      </div>
+      <>
+        <div className="absolute bottom-40 left-0 right-0 flex items-center justify-center gap-6 p-4">
+          <Button
+            size="lg"
+            variant="outline"
+            className="h-16 w-16 rounded-full shadow-lg bg-white hover:bg-gray-100 text-gray-900 border-0"
+            onClick={onDislike}
+          >
+            <X className="h-8 w-8" />
+          </Button>
+          <Button
+            size="lg"
+            variant="default"
+            className="h-16 w-16 rounded-full shadow-lg bg-red-500 hover:bg-red-600 text-white"
+            onClick={handleLike}
+          >
+            <Heart className="h-8 w-8" />
+          </Button>
+        </div>
+        <div className="absolute bottom-24 right-6">
+          <Button size="sm" variant="secondary" className="h-10 w-10 rounded-full shadow-lg" onClick={onComment}>
+            <MessageCircle className="h-4 w-4" />
+          </Button>
+        </div>
+      </>
     </Card>
   )
 }

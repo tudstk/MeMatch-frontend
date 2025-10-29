@@ -149,10 +149,10 @@ export function MemeDetailModal({ meme, open, onOpenChange, onMemeUpdate }: Meme
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={cn("gap-2 hover:text-accent", isLiked && "text-accent")}
+                  className={cn("gap-2 hover:text-green-500", isLiked && "text-green-500")}
                   onClick={handleLike}
                 >
-                  <Heart className={cn("h-5 w-5", isLiked && "fill-accent")} />
+                  <Heart className={cn("h-5 w-5", isLiked && "fill-green-500")} />
                   <span className="font-medium">{localMeme.likes.toLocaleString()}</span>
                 </Button>
                 <div className="flex items-center gap-2 text-muted-foreground">

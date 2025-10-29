@@ -176,18 +176,17 @@ export function SwipeableCard({ meme, onSwipe, onComment, isInteractive = true, 
           draggable={false}
         />
 
-        {/* Swipe indicators */}
         {isInteractive && swipeDirection === "right" && Math.abs(dragOffset.x) > 30 && (
-          <div className="absolute inset-0 flex items-center justify-center bg-accent/20 animate-in fade-in">
-            <div className="bg-accent text-accent-foreground px-8 py-4 rounded-full font-bold text-2xl rotate-12 border-4 border-accent">
+          <div className="absolute inset-0 flex items-center justify-center bg-red-500/20 animate-in fade-in">
+            <div className="bg-red-500 text-white px-8 py-4 rounded-full font-bold text-2xl rotate-12 border-4 border-red-500">
               LIKE
             </div>
           </div>
         )}
 
         {isInteractive && swipeDirection === "left" && Math.abs(dragOffset.x) > 30 && (
-          <div className="absolute inset-0 flex items-center justify-center bg-destructive/20 animate-in fade-in">
-            <div className="bg-destructive text-destructive-foreground px-8 py-4 rounded-full font-bold text-2xl -rotate-12 border-4 border-destructive">
+          <div className="absolute inset-0 flex items-center justify-center bg-white/20 animate-in fade-in">
+            <div className="bg-white text-gray-900 px-8 py-4 rounded-full font-bold text-2xl -rotate-12 border-4 border-white">
               NOPE
             </div>
           </div>
@@ -219,32 +218,36 @@ export function SwipeableCard({ meme, onSwipe, onComment, isInteractive = true, 
       </div>
 
       {isInteractive && (
-        <div className="absolute bottom-40 left-0 right-0 flex items-center justify-center gap-6 p-4 pointer-events-none">
-          <Button
-            size="lg"
-            variant="destructive"
-            className="h-16 w-16 rounded-full shadow-lg pointer-events-auto"
-            onClick={handleDislike}
-          >
-            <X className="h-8 w-8" />
-          </Button>
-          <Button
-            size="lg"
-            variant="default"
-            className="h-16 w-16 rounded-full shadow-lg bg-accent hover:bg-accent/90 pointer-events-auto"
-            onClick={handleLike}
-          >
-            <Heart className="h-8 w-8" />
-          </Button>
-          <Button
-            size="lg"
-            variant="secondary"
-            className="h-14 w-14 rounded-full shadow-lg pointer-events-auto"
-            onClick={onComment}
-          >
-            <MessageCircle className="h-6 w-6" />
-          </Button>
-        </div>
+        <>
+          <div className="absolute bottom-40 left-0 right-0 flex items-center justify-center gap-6 p-4 pointer-events-none">
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-16 w-16 rounded-full shadow-lg bg-white hover:bg-gray-100 text-gray-900 border-0 pointer-events-auto"
+              onClick={handleDislike}
+            >
+              <X className="h-8 w-8" />
+            </Button>
+            <Button
+              size="lg"
+              variant="default"
+              className="h-16 w-16 rounded-full shadow-lg bg-red-500 hover:bg-red-600 text-white pointer-events-auto"
+              onClick={handleLike}
+            >
+              <Heart className="h-8 w-8" />
+            </Button>
+          </div>
+          <div className="absolute bottom-24 right-6 pointer-events-none">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-10 w-10 rounded-full shadow-lg pointer-events-auto"
+              onClick={onComment}
+            >
+              <MessageCircle className="h-4 w-4" />
+            </Button>
+          </div>
+        </>
       )}
     </Card>
   )
