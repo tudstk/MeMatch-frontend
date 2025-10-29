@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useRef } from "react"
 import type { UserProfile, Meme } from "@/lib/mock-data"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -20,11 +22,67 @@ export function UserProfileCard({ userProfile, onSwipe, onCommentAdded }: UserPr
   const [selectedMeme, setSelectedMeme] = useState<Meme | null>(null)
   const [commentDialogOpen, setCommentDialogOpen] = useState(false)
   const [imageViewerOpen, setImageViewerOpen] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const [startPos, setStartPos] = useState({ x: 0, y: 0 })
   const cardRef = useRef<HTMLDivElement>(null)
 
   const currentMeme = userProfile.memes[currentMemeIndex]
   const isLastMeme = currentMemeIndex === userProfile.memes.length - 1
   const isFirstMeme = currentMemeIndex === 0
+
+  const handleDragStart = (clientX: number, clientY: number) => {
+    setIsDragging(true)
+    setStartPos({ x: clientX, y: clientY })
+  }
+
+  const handleDragMove = (clientX: number, clientY: number) => {
+    if (!isDragging) return
+    const deltaX = clientX - startPos.x
+    const deltaY = clientY - startPos.y
+    setDragOffset({ x: deltaX, y: deltaY })
+  }
+
+  const handleDragEnd = () => {
+    if (!isDragging) return
+    setIsDragging(false)
+
+    const threshold = 100
+    if (Math.abs(dragOffset.x) > threshold) {
+      if (dragOffset.x > 0) {
+        handleLike()
+      } else {
+        handleReject()
+      }
+    }
+    setDragOffset({ x: 0, y: 0 })
+  }
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    handleDragStart(e.clientX, e.clientY)
+  }
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    handleDragMove(e.clientX, e.clientY)
+  }
+
+  const handleMouseUp = () => {
+    handleDragEnd()
+  }
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0]
+    handleDragStart(touch.clientX, touch.clientY)
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const touch = e.touches[0]
+    handleDragMove(touch.clientX, touch.clientY)
+  }
+
+  const handleTouchEnd = () => {
+    handleDragEnd()
+  }
 
   const handleNextMeme = () => {
     if (!isLastMeme) {
@@ -55,9 +113,47 @@ export function UserProfileCard({ userProfile, onSwipe, onCommentAdded }: UserPr
     setImageViewerOpen(true)
   }
 
+  const rotation = dragOffset.x / 20
+  const opacity = Math.min(Math.abs(dragOffset.x) / 100, 1)
+
   return (
     <>
-      <div ref={cardRef} className="relative w-full h-full bg-card rounded-3xl overflow-hidden shadow-2xl">
+      <div
+        ref={cardRef}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{
+          transform: `translate(${dragOffset.x}px, ${dragOffset.y}px) rotate(${rotation}deg)`,
+          transition: isDragging ? "none" : "transform 0.3s ease-out",
+          cursor: isDragging ? "grabbing" : "grab",
+        }}
+        className="relative w-full h-full bg-card rounded-3xl overflow-hidden shadow-2xl"
+      >
+        {dragOffset.x > 50 && (
+          <div
+            className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
+            style={{ opacity }}
+          >
+            <div className="text-8xl font-bold text-red-500 border-8 border-red-500 px-8 py-4 rotate-[-20deg]">
+              LIKE
+            </div>
+          </div>
+        )}
+
+        {dragOffset.x < -50 && (
+          <div
+            className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
+            style={{ opacity }}
+          >
+            <div className="text-8xl font-bold text-white border-8 border-white px-8 py-4 rotate-[20deg]">NOPE</div>
+          </div>
+        )}
+
         {/* User Profile Header */}
         <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black/70 to-transparent p-6">
           <div className="flex items-center gap-4">
