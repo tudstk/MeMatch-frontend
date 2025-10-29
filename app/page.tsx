@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { UserProfileCard } from "@/components/user-profile-card"
 import { BottomNav } from "@/components/bottom-nav"
+import { MatchAnimation } from "@/components/match-animation"
 import { mockUserProfiles, type UserProfile } from "@/lib/mock-data"
 import { Flame, Heart, X } from "lucide-react"
 
@@ -12,6 +13,9 @@ export default function FeedPage() {
   const [likeCount, setLikeCount] = useState(0)
   const [rejectCount, setRejectCount] = useState(0)
   const [showAnimation, setShowAnimation] = useState<"like" | "reject" | null>(null)
+  const [showMatchAnimation, setShowMatchAnimation] = useState(false)
+  const [matchedUser, setMatchedUser] = useState<UserProfile | null>(null)
+  const [matchedUsers, setMatchedUsers] = useState<UserProfile[]>([])
 
   const currentUserProfile = userProfiles[currentUserIndex]
   const nextUserProfile = userProfiles[currentUserIndex + 1]
@@ -20,6 +24,14 @@ export default function FeedPage() {
     if (direction === "right") {
       setLikeCount((prev) => prev + 1)
       setShowAnimation("like")
+
+      if (currentUserProfile.hasLikedYou) {
+        setTimeout(() => {
+          setMatchedUser(currentUserProfile)
+          setShowMatchAnimation(true)
+          setMatchedUsers((prev) => [...prev, currentUserProfile])
+        }, 800)
+      }
     } else {
       setRejectCount((prev) => prev + 1)
       setShowAnimation("reject")
@@ -43,6 +55,11 @@ export default function FeedPage() {
         memes: profile.memes.map((meme) => (meme.id === memeId ? { ...meme, comments: updatedComments } : meme)),
       })),
     )
+  }
+
+  const handleMatchAnimationComplete = () => {
+    setShowMatchAnimation(false)
+    setMatchedUser(null)
   }
 
   if (!currentUserProfile) {
@@ -113,6 +130,12 @@ export default function FeedPage() {
           )}
         </div>
       </div>
+
+      {showMatchAnimation && matchedUser && (
+        <div onClick={handleMatchAnimationComplete}>
+          <MatchAnimation userProfile={matchedUser} onComplete={handleMatchAnimationComplete} />
+        </div>
+      )}
 
       <BottomNav />
     </main>

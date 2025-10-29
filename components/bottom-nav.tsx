@@ -1,6 +1,6 @@
 "use client"
 
-import { Home, User } from "lucide-react"
+import { Home, User, Flame } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -20,6 +20,16 @@ export function BottomNav() {
         >
           <Home className="h-6 w-6" />
           <span className="text-xs font-medium">Feed</span>
+        </Link>
+        <Link
+          href="/matches"
+          className={cn(
+            "flex flex-col items-center justify-center gap-1 flex-1 transition-colors",
+            pathname === "/matches" ? "text-primary" : "text-muted-foreground",
+          )}
+        >
+          <Flame className="h-6 w-6" />
+          <span className="text-xs font-medium">Matches</span>
         </Link>
         <Link
           href="/profile"

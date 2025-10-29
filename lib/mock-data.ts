@@ -32,6 +32,7 @@ export interface UserProfile {
     totalLikes: number
     followers: number
   }
+  hasLikedYou?: boolean
 }
 
 // Updated mock data to use real generated images
@@ -216,6 +217,7 @@ export const mockUserProfiles: UserProfile[] = [
     name: "MemeKing",
     avatar: "/diverse-group-avatars.png",
     bio: "Professional meme curator 👑 | 5 years of making people laugh",
+    hasLikedYou: true,
     memes: [
       {
         id: "1",
@@ -277,6 +279,7 @@ export const mockUserProfiles: UserProfile[] = [
     name: "CodeJoker",
     avatar: "/diverse-group-futuristic-setting.png",
     bio: "Developer by day, meme lord by night 💻",
+    hasLikedYou: false,
     memes: [
       {
         id: "2",
@@ -316,6 +319,7 @@ export const mockUserProfiles: UserProfile[] = [
     name: "MemeLord",
     avatar: "/diverse-group-futuristic-avatars.png",
     bio: "Spreading joy one meme at a time 🎭✨",
+    hasLikedYou: true,
     memes: [
       {
         id: "3",
