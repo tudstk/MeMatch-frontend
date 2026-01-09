@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Heart, X, ChevronLeft, ChevronRight, Maximize } from "lucide-react"
 import Image from "next/image"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { useRouter } from "next/navigation"
 
 interface UserProfileCardProps {
   userProfile: FrontendUserProfile
@@ -16,12 +17,18 @@ interface UserProfileCardProps {
 }
 
 export function UserProfileCard({ userProfile, onSwipe }: UserProfileCardProps) {
+  const router = useRouter()
   const [currentMemeIndex, setCurrentMemeIndex] = useState(0)
   const [imageViewerOpen, setImageViewerOpen] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [startPos, setStartPos] = useState({ x: 0, y: 0 })
   const cardRef = useRef<HTMLDivElement>(null)
+
+  const handleUsernameClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    router.push(`/user/${userProfile.id}`)
+  }
 
   const currentMeme = userProfile.memes[currentMemeIndex]
   const isLastMeme = currentMemeIndex === userProfile.memes.length - 1
@@ -156,7 +163,12 @@ export function UserProfileCard({ userProfile, onSwipe }: UserProfileCardProps) 
               <AvatarFallback>{userProfile.name[0]}</AvatarFallback>
             </Avatar>
             <div className="flex-1 text-white">
-              <h2 className="text-2xl font-bold">{userProfile.name}</h2>
+              <h2 
+                className="text-2xl font-bold cursor-pointer hover:underline"
+                onClick={handleUsernameClick}
+              >
+                {userProfile.name}
+              </h2>
               <p className="text-sm text-white/90">{userProfile.bio}</p>
               <div className="flex items-center gap-4 mt-2 text-xs">
                 <span>{userProfile.stats?.totalMemes} memes</span>

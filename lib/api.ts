@@ -244,6 +244,13 @@ export const usersApi = {
     return apiRequest<User>(`/users/${id}`);
   },
 
+  search: async (query: string): Promise<User[]> => {
+    if (!query || query.trim().length === 0) {
+      return [];
+    }
+    return apiRequest<User[]>(`/users/search?q=${encodeURIComponent(query)}`);
+  },
+
   updateProfile: async (id: number, description?: string, profilePictureUrl?: string): Promise<User> => {
     return apiRequest<User>(`/users/${id}/profile`, {
       method: 'PUT',
