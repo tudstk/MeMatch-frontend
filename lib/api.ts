@@ -129,6 +129,10 @@ export interface FrontendUserProfile {
   hasLikedYou?: boolean;
   matchingTagsCount?: number;
   humourTags?: HumourTag[];
+  age?: number;
+  gender?: string;
+  city?: string;
+  country?: string;
 }
 
 // Helper function to get auth token
@@ -477,6 +481,11 @@ export function transformUserToFrontendProfile(user: User, memes: FrontendMeme[]
       totalLikes,
       followers: 0, // Backend doesn't have followers yet
     },
+    age: user.age,
+    gender: user.gender,
+    city: user.city,
+    country: user.country,
+    humourTags: user.humourTags,
   };
 }
 

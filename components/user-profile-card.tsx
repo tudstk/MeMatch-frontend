@@ -6,21 +6,17 @@ import { useState, useRef } from "react"
 import type { FrontendUserProfile, FrontendMeme } from "@/lib/api"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { Heart, X, MessageCircle, ChevronLeft, ChevronRight, Maximize } from "lucide-react"
-import { CommentDialog } from "@/components/comment-dialog"
+import { Heart, X, ChevronLeft, ChevronRight, Maximize } from "lucide-react"
 import Image from "next/image"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 
 interface UserProfileCardProps {
   userProfile: FrontendUserProfile
   onSwipe: (direction: "left" | "right") => void
-  onCommentAdded: (memeId: string, updatedComments: any[]) => void
 }
 
-export function UserProfileCard({ userProfile, onSwipe, onCommentAdded }: UserProfileCardProps) {
+export function UserProfileCard({ userProfile, onSwipe }: UserProfileCardProps) {
   const [currentMemeIndex, setCurrentMemeIndex] = useState(0)
-  const [selectedMeme, setSelectedMeme] = useState<FrontendMeme | null>(null)
-  const [commentDialogOpen, setCommentDialogOpen] = useState(false)
   const [imageViewerOpen, setImageViewerOpen] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
@@ -104,10 +100,6 @@ export function UserProfileCard({ userProfile, onSwipe, onCommentAdded }: UserPr
     onSwipe("left")
   }
 
-  const handleComment = () => {
-    setSelectedMeme(currentMeme)
-    setCommentDialogOpen(true)
-  }
 
   const handleOpenImageViewer = () => {
     setImageViewerOpen(true)
@@ -232,8 +224,8 @@ export function UserProfileCard({ userProfile, onSwipe, onCommentAdded }: UserPr
         )}
 
         {/* Meme Caption */}
-        <div className="absolute bottom-32 left-0 right-0 z-20 bg-gradient-to-t from-black/70 to-transparent p-6">
-          <p className="text-white text-lg font-medium">{currentMeme?.caption}</p>
+        <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/70 to-transparent p-6">
+          <p className="text-white text-lg mb-0 font-medium">{currentMeme?.caption}</p>
           <p className="text-white/70 text-sm mt-1">
             {currentMemeIndex + 1} of {userProfile.memes.length}
           </p>
@@ -258,14 +250,6 @@ export function UserProfileCard({ userProfile, onSwipe, onCommentAdded }: UserPr
             </Button>
           </div>
         </div>
-
-        {/* Comment Button - Bottom Right */}
-        <button
-          onClick={handleComment}
-          className="absolute bottom-8 right-8 z-20 bg-black/50 hover:bg-black/70 text-white rounded-full p-3 transition-all"
-        >
-          <MessageCircle className="h-5 w-5" />
-        </button>
       </div>
 
       <Dialog open={imageViewerOpen} onOpenChange={setImageViewerOpen}>
@@ -281,13 +265,6 @@ export function UserProfileCard({ userProfile, onSwipe, onCommentAdded }: UserPr
           </div>
         </DialogContent>
       </Dialog>
-
-      <CommentDialog
-        meme={selectedMeme}
-        open={commentDialogOpen}
-        onOpenChange={setCommentDialogOpen}
-        onCommentAdded={onCommentAdded}
-      />
     </>
   )
 }

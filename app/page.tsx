@@ -35,6 +35,7 @@ export default function FeedPage() {
   const [matchedUsers, setMatchedUsers] = useState<FrontendUserProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [currentUserHumourTags, setCurrentUserHumourTags] = useState<string[]>([])
 
   useEffect(() => {
     if (!authLoading) {
@@ -60,8 +61,10 @@ export default function FeedPage() {
       
       const otherUsers = await usersApi.getForFeed(currentUserId)
       
-      // Get current user's preferences to calculate matching tags
+      // Get current user's data to calculate matching tags
       const currentUserData = await usersApi.getById(currentUserId)
+      // Store current user's profile humour tags for comparison
+      setCurrentUserHumourTags(currentUserData.humourTags || [])
       
       // Load profiles with memes for each user
       const profilesPromises = otherUsers.map(async (user) => {
@@ -306,7 +309,7 @@ export default function FeedPage() {
           {nextUserProfile && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-full h-full opacity-50 scale-95 transition-all">
-                <UserProfileCard userProfile={nextUserProfile} onSwipe={() => {}} onCommentAdded={() => {}} />
+                <UserProfileCard userProfile={nextUserProfile} onSwipe={() => {}} />
               </div>
             </div>
           )}
@@ -317,7 +320,6 @@ export default function FeedPage() {
               <UserProfileCard
                 userProfile={currentUserProfile}
                 onSwipe={handleSwipe}
-                onCommentAdded={handleCommentAdded}
               />
             </div>
           )}
@@ -340,6 +342,51 @@ export default function FeedPage() {
             </div>
           )}
         </div>
+
+        {/* Profile Information - Below Card */}
+        {currentUserProfile && (
+          <div className="mt-4 space-y-3">
+            {/* Profile Details */}
+            <div className="flex items-center gap-3 flex-wrap">
+              {currentUserProfile.age && (
+                <span className="px-3 py-1.5 bg-card border border-border rounded-full text-sm">
+                  {currentUserProfile.age} years old
+                </span>
+              )}
+              {currentUserProfile.gender && (
+                <span className="px-3 py-1.5 bg-card border border-border rounded-full text-sm">
+                  {currentUserProfile.gender}
+                </span>
+              )}
+              {(currentUserProfile.city || currentUserProfile.country) && (
+                <span className="px-3 py-1.5 bg-card border border-border rounded-full text-sm">
+                  {[currentUserProfile.city, currentUserProfile.country].filter(Boolean).join(', ')}
+                </span>
+              )}
+            </div>
+
+            {/* Humour Tags */}
+            {currentUserProfile.humourTags && currentUserProfile.humourTags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {currentUserProfile.humourTags.map((tag, index) => {
+                  const isMatching = currentUserHumourTags.includes(tag)
+                  return (
+                    <span
+                      key={index}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium ${
+                        isMatching
+                          ? 'bg-purple-500/20 text-purple-600 border border-purple-500/40'
+                          : 'bg-gray-100 text-gray-600 border border-gray-300'
+                      }`}
+                    >
+                      {tag.replace(/_/g, ' ').toLowerCase()}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {showMatchAnimation && matchedUser && (
