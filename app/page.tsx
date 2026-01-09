@@ -36,6 +36,8 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentUserHumourTags, setCurrentUserHumourTags] = useState<string[]>([])
+  const [countdown, setCountdown] = useState<number | null>(null)
+  const [justReloaded, setJustReloaded] = useState(false)
 
   useEffect(() => {
     if (!authLoading) {
@@ -46,6 +48,55 @@ export default function FeedPage() {
       }
     }
   }, [isAuthenticated, authLoading, router])
+
+  // Countdown timer effect
+  useEffect(() => {
+    if (countdown !== null && countdown > 0) {
+      const timer = setTimeout(() => {
+        setCountdown(countdown - 1)
+      }, 1000)
+      return () => clearTimeout(timer)
+    } else if (countdown === 0) {
+      // Countdown finished, session is done - reset counts and reload feed
+      setCountdown(null)
+      setJustReloaded(true)
+      setLikeCount(0)
+      setRejectCount(0)
+      loadUserProfiles()
+    }
+  }, [countdown])
+
+  // Reset justReloaded flag after loading completes
+  useEffect(() => {
+    if (!loading && justReloaded) {
+      // Wait a bit after loading completes before allowing countdown to start again
+      const timer = setTimeout(() => {
+        console.log('Resetting justReloaded flag after loading')
+        setJustReloaded(false)
+      }, 2000) // Increased delay to 2 seconds
+      return () => clearTimeout(timer)
+    }
+  }, [loading, justReloaded])
+
+  // Check if feed is empty and start countdown
+  useEffect(() => {
+    // Only start countdown if:
+    // - Not currently loading
+    // - Feed is empty
+    // - No match animation showing
+    // - Countdown not already active
+    // - We haven't just reloaded (wait for loading to complete)
+    if (!loading && 
+        !authLoading && 
+        userProfiles.length === 0 && 
+        !showMatchAnimation && 
+        !matchedUser && 
+        countdown === null &&
+        !justReloaded) {
+      console.log('Starting countdown - feed is empty, loading:', loading, 'justReloaded:', justReloaded)
+      setCountdown(5)
+    }
+  }, [userProfiles.length, loading, authLoading, showMatchAnimation, matchedUser, countdown, justReloaded])
 
   const loadUserProfiles = async () => {
     try {
@@ -132,6 +183,13 @@ export default function FeedPage() {
       }
       
       setUserProfiles(profiles)
+      setCurrentUserIndex(0)
+      // Reset countdown if profiles are loaded
+      if (profiles.length > 0) {
+        setCountdown(null)
+        setJustReloaded(false)
+      }
+      // If profiles.length === 0, keep justReloaded=true to prevent immediate countdown restart
     } catch (err: any) {
       console.error('Error loading user profiles:', err)
       setError(err.message || 'Failed to load profiles')
@@ -191,11 +249,8 @@ export default function FeedPage() {
       
       // For non-matches, handle navigation after state update
       if (filtered.length === 0) {
-        // No more users, reload feed
-        setTimeout(() => {
-          loadUserProfiles()
-          setCurrentUserIndex(0)
-        }, 100)
+        // No more users - don't reload immediately, let the countdown handle it
+        setCurrentUserIndex(0)
       } else {
         // There are more users, stay at index 0 (which now points to the next user)
         // Set index after state update completes
@@ -261,23 +316,42 @@ export default function FeedPage() {
         <header className="sticky top-16 z-40 bg-card/80 backdrop-blur-lg border-b border-border">
           <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-center">
             <div className="flex items-center gap-4 text-sm">
-              <div className="flex items-center gap-1.5 bg-red-500/10 px-3 py-1.5 rounded-full">
-                <Heart className="h-4 w-4 text-red-500 fill-red-500" />
-                <span className="font-semibold text-red-500">{likeCount}</span>
-              </div>
               <div className="flex items-center gap-1.5 bg-gray-500/10 px-3 py-1.5 rounded-full">
                 <X className="h-4 w-4 text-gray-500" />
                 <span className="font-semibold text-gray-500">{rejectCount}</span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-red-500/10 px-3 py-1.5 rounded-full">
+                <Heart className="h-4 w-4 text-red-500 fill-red-500" />
+                <span className="font-semibold text-red-500">{likeCount}</span>
               </div>
             </div>
           </div>
         </header>
         <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center">
           <div className="text-center">
-            <p className="text-muted-foreground mb-4">No more profiles to show!</p>
-            <Button onClick={loadUserProfiles} variant="outline">
-              Reload Profiles
-            </Button>
+            {countdown !== null && countdown > 0 ? (
+              <>
+                <p className="text-muted-foreground mb-2">
+                  Users will be available for interacting in
+                </p>
+                <p className="text-4xl font-bold text-primary mb-4">
+                  {countdown} {countdown === 1 ? 'second' : 'seconds'}
+                </p>
+                <div className="w-64 h-2 bg-gray-200 rounded-full mx-auto overflow-hidden">
+                  <div 
+                    className="h-full bg-primary transition-all duration-1000"
+                    style={{ width: `${((15 - countdown) / 15) * 100}%` }}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-muted-foreground mb-4">No more profiles to show!</p>
+                <Button onClick={loadUserProfiles} variant="outline">
+                  Reload Profiles
+                </Button>
+              </>
+            )}
           </div>
         </div>
         <BottomNav />
@@ -291,13 +365,13 @@ export default function FeedPage() {
       <header className="sticky top-16 z-40 bg-card/80 backdrop-blur-lg border-b border-border">
         <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-center">
           <div className="flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-1.5 bg-red-500/10 px-3 py-1.5 rounded-full">
-              <Heart className="h-4 w-4 text-red-500 fill-red-500" />
-              <span className="font-semibold text-red-500">{likeCount}</span>
-            </div>
             <div className="flex items-center gap-1.5 bg-gray-500/10 px-3 py-1.5 rounded-full">
               <X className="h-4 w-4 text-gray-500" />
               <span className="font-semibold text-gray-500">{rejectCount}</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-red-500/10 px-3 py-1.5 rounded-full">
+              <Heart className="h-4 w-4 text-red-500 fill-red-500" />
+              <span className="font-semibold text-red-500">{likeCount}</span>
             </div>
           </div>
         </div>
