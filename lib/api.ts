@@ -2,12 +2,48 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 
 // Types matching backend
+export type HumourTag = 
+  | 'DARK_HUMOUR'
+  | 'LIGHT_HUMOUR'
+  | 'DOGS_MEMES'
+  | 'CATS_MEMES'
+  | 'ANIMALS_MEMES'
+  | 'PROGRAMMING_MEMES'
+  | 'GAMING_MEMES'
+  | 'MOVIE_MEMES'
+  | 'TV_SHOW_MEMES'
+  | 'POLITICAL_MEMES'
+  | 'RELATIONSHIP_MEMES'
+  | 'WORK_MEMES'
+  | 'SCHOOL_MEMES'
+  | 'FOOD_MEMES'
+  | 'FITNESS_MEMES'
+  | 'TRAVEL_MEMES'
+  | 'MUSIC_MEMES'
+  | 'SPORTS_MEMES'
+  | 'SCIENCE_MEMES'
+  | 'HISTORY_MEMES'
+  | 'PHILOSOPHY_MEMES'
+  | 'WHOLESOME_MEMES'
+  | 'SARCASM'
+  | 'IRONY'
+  | 'PUNS';
+
 export interface User {
   id: number;
   email: string;
   username: string;
   description?: string;
   imageUrl?: string;
+  age?: number;
+  gender?: string;
+  city?: string;
+  country?: string;
+  humourTags?: HumourTag[];
+  genderPreference?: string;
+  ageMinPreference?: number;
+  ageMaxPreference?: number;
+  humourTagsPreference?: HumourTag[];
 }
 
 export interface Meme {
@@ -91,6 +127,8 @@ export interface FrontendUserProfile {
     followers: number;
   };
   hasLikedYou?: boolean;
+  matchingTagsCount?: number;
+  humourTags?: HumourTag[];
 }
 
 // Helper function to get auth token
@@ -194,6 +232,10 @@ export const usersApi = {
     return apiRequest<User[]>('/users');
   },
 
+  getForFeed: async (userId: number): Promise<User[]> => {
+    return apiRequest<User[]>(`/users/feed/${userId}`);
+  },
+
   getById: async (id: number): Promise<User> => {
     return apiRequest<User>(`/users/${id}`);
   },
@@ -203,6 +245,37 @@ export const usersApi = {
       method: 'PUT',
       body: JSON.stringify({ description, profilePictureUrl }),
     });
+  },
+
+  updateProfileDetails: async (
+    id: number,
+    age?: number,
+    gender?: string,
+    city?: string,
+    country?: string,
+    humourTags?: HumourTag[]
+  ): Promise<User> => {
+    return apiRequest<User>(`/users/${id}/profile/details`, {
+      method: 'PUT',
+      body: JSON.stringify({ age, gender, city, country, humourTags }),
+    });
+  },
+
+  updatePreferences: async (
+    id: number,
+    genderPreference?: string,
+    ageMinPreference?: number,
+    ageMaxPreference?: number,
+    humourTagsPreference?: HumourTag[]
+  ): Promise<User> => {
+    return apiRequest<User>(`/users/${id}/preferences`, {
+      method: 'PUT',
+      body: JSON.stringify({ genderPreference, ageMinPreference, ageMaxPreference, humourTagsPreference }),
+    });
+  },
+
+  getAllHumourTags: async (): Promise<HumourTag[]> => {
+    return apiRequest<HumourTag[]>('/users/humour-tags');
   },
 };
 

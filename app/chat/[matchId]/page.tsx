@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ArrowLeft, Send } from "lucide-react"
+import { Navbar } from "@/components/navbar"
 import { useAuth } from "@/lib/auth-context"
 import { messagesApi, matchesApi, usersApi, type Message } from "@/lib/api"
 
@@ -138,8 +139,9 @@ export default function ChatPage() {
 
   return (
     <main className="h-screen flex flex-col bg-background">
+      <Navbar />
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-card border-b border-border">
+      <header className="sticky top-16 z-40 bg-card border-b border-border">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()}>
             <ArrowLeft className="h-5 w-5" />

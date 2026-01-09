@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { BottomNav } from "@/components/bottom-nav"
+import { Navbar } from "@/components/navbar"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -19,7 +20,7 @@ import {
   type FrontendUserProfile,
   type FrontendMeme
 } from "@/lib/api"
-import { Flame, MessageCircle, Heart } from "lucide-react"
+import { MessageCircle, Heart, Flame } from "lucide-react"
 import Image from "next/image"
 
 export default function MatchesPage() {
@@ -132,10 +133,10 @@ export default function MatchesPage() {
 
   return (
     <main className="min-h-screen bg-background pb-20">
-      <header className="sticky top-0 z-40 bg-card/80 backdrop-blur-lg border-b border-border">
+      <Navbar />
+      <header className="sticky top-16 z-40 bg-card/80 backdrop-blur-lg border-b border-border">
         <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Flame className="h-6 w-6 text-red-500" />
             <h1 className="text-xl font-bold">Matches</h1>
           </div>
           <div className="text-sm text-muted-foreground">{matchedUsers.length} matches</div>

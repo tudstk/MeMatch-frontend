@@ -171,6 +171,11 @@ export function UserProfileCard({ userProfile, onSwipe, onCommentAdded }: UserPr
                 <span>{userProfile.stats?.totalLikes.toLocaleString()} likes</span>
                 <span>{userProfile.stats?.followers.toLocaleString()} followers</span>
               </div>
+              {userProfile.matchingTagsCount !== undefined && userProfile.matchingTagsCount > 0 && (
+                <div className="mt-2 px-3 py-1 bg-green-500/80 rounded-full text-xs font-semibold inline-block">
+                  Matches {userProfile.matchingTagsCount} tag{userProfile.matchingTagsCount !== 1 ? 's' : ''}
+                </div>
+              )}
             </div>
           </div>
         </div>

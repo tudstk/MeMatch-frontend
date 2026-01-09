@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { UserProfileCard } from "@/components/user-profile-card"
 import { BottomNav } from "@/components/bottom-nav"
 import { MatchAnimation } from "@/components/match-animation"
+import { Navbar } from "@/components/navbar"
+import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context"
 import { 
   usersApi, 
@@ -49,12 +51,17 @@ export default function FeedPage() {
       setLoading(true)
       setError(null)
       
-      // Get all users
-      const users = await usersApi.getAll()
-      
-      // Filter out current user
+      // Get users for feed (excludes current user and matched users)
       const currentUserId = user?.id
-      const otherUsers = users.filter(u => u.id !== currentUserId)
+      if (!currentUserId) {
+        setError('User not authenticated')
+        return
+      }
+      
+      const otherUsers = await usersApi.getForFeed(currentUserId)
+      
+      // Get current user's preferences to calculate matching tags
+      const currentUserData = await usersApi.getById(currentUserId)
       
       // Load profiles with memes for each user
       const profilesPromises = otherUsers.map(async (user) => {
@@ -80,7 +87,16 @@ export default function FeedPage() {
             })
           )
           
-          return transformUserToFrontendProfile(user, transformedMemes)
+          const profile = transformUserToFrontendProfile(user, transformedMemes)
+          
+          // Calculate matching tags count
+          const currentUserPreferences = currentUserData.humourTagsPreference || []
+          const otherUserTags = user.humourTags || []
+          const matchingTags = currentUserPreferences.filter(tag => otherUserTags.includes(tag))
+          profile.matchingTagsCount = matchingTags.length
+          profile.humourTags = otherUserTags
+          
+          return profile
         } catch (err) {
           console.error(`Error loading profile for user ${user.id}:`, err)
           return null
@@ -124,23 +140,29 @@ export default function FeedPage() {
   const handleSwipe = async (direction: "left" | "right") => {
     if (!user || !currentUserProfile) return
 
+    const currentProfileId = currentUserProfile.id
+    let isMatch = false
+
     if (direction === "right") {
       setLikeCount((prev) => prev + 1)
       setShowAnimation("like")
 
       // Like the user (not their memes)
       try {
-        const currentUserId = parseInt(currentUserProfile.id)
+        const currentUserId = parseInt(currentProfileId)
         
         // Like the user - this will create a match if mutual
         const result = await matchesApi.likeUser(user.id, currentUserId)
         
         // If it's a match, show the match animation
         if (result.isMatch) {
+          isMatch = true
+          // Set matched user immediately so animation can show
+          setMatchedUser(currentUserProfile)
+          setMatchedUsers((prev) => [...prev, currentUserProfile])
+          // Show match animation after like animation completes
           setTimeout(() => {
-            setMatchedUser(currentUserProfile)
             setShowMatchAnimation(true)
-            setMatchedUsers((prev) => [...prev, currentUserProfile])
           }, 800)
         }
       } catch (err) {
@@ -154,14 +176,33 @@ export default function FeedPage() {
     // Clear animation after delay
     setTimeout(() => setShowAnimation(null), 800)
 
-    // Move to next user profile
-    if (currentUserIndex < userProfiles.length - 1) {
-      setCurrentUserIndex(currentUserIndex + 1)
-    } else {
-      // Reload profiles when we run out
-      loadUserProfiles()
-      setCurrentUserIndex(0)
-    }
+    // Remove user from feed and handle navigation
+    setUserProfiles((prev) => {
+      const filtered = prev.filter(p => p.id !== currentProfileId)
+      
+      // If it's a match, don't navigate yet - wait for animation
+      if (isMatch) {
+        // Keep index at 0 (next user will be at index 0 after removal)
+        return filtered
+      }
+      
+      // For non-matches, handle navigation after state update
+      if (filtered.length === 0) {
+        // No more users, reload feed
+        setTimeout(() => {
+          loadUserProfiles()
+          setCurrentUserIndex(0)
+        }, 100)
+      } else {
+        // There are more users, stay at index 0 (which now points to the next user)
+        // Set index after state update completes
+        setTimeout(() => {
+          setCurrentUserIndex(0)
+        }, 0)
+      }
+      
+      return filtered
+    })
   }
 
   const handleCommentAdded = async (memeId: string, updatedComments: any[]) => {
@@ -178,6 +219,9 @@ export default function FeedPage() {
   const handleMatchAnimationComplete = () => {
     setShowMatchAnimation(false)
     setMatchedUser(null)
+    // After match animation, reload feed to get updated list (without matched user)
+    loadUserProfiles()
+    setCurrentUserIndex(0)
   }
 
   const currentUserProfile = userProfiles[currentUserIndex]
@@ -207,22 +251,42 @@ export default function FeedPage() {
     )
   }
 
-  if (!currentUserProfile) {
+  if (!currentUserProfile && !showMatchAnimation && !matchedUser) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">No more profiles to show!</p>
-      </div>
+      <main className="min-h-screen bg-background pb-20">
+        <Navbar />
+        <header className="sticky top-16 z-40 bg-card/80 backdrop-blur-lg border-b border-border">
+          <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-center">
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-1.5 bg-red-500/10 px-3 py-1.5 rounded-full">
+                <Heart className="h-4 w-4 text-red-500 fill-red-500" />
+                <span className="font-semibold text-red-500">{likeCount}</span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-gray-500/10 px-3 py-1.5 rounded-full">
+                <X className="h-4 w-4 text-gray-500" />
+                <span className="font-semibold text-gray-500">{rejectCount}</span>
+              </div>
+            </div>
+          </div>
+        </header>
+        <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-muted-foreground mb-4">No more profiles to show!</p>
+            <Button onClick={loadUserProfiles} variant="outline">
+              Reload Profiles
+            </Button>
+          </div>
+        </div>
+        <BottomNav />
+      </main>
     )
   }
 
   return (
     <main className="min-h-screen bg-background pb-20">
-      <header className="sticky top-0 z-40 bg-card/80 backdrop-blur-lg border-b border-border">
-        <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Flame className="h-6 w-6 text-accent" />
-            <h1 className="text-xl font-bold">MemeSwipe</h1>
-          </div>
+      <Navbar />
+      <header className="sticky top-16 z-40 bg-card/80 backdrop-blur-lg border-b border-border">
+        <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-center">
           <div className="flex items-center gap-4 text-sm">
             <div className="flex items-center gap-1.5 bg-red-500/10 px-3 py-1.5 rounded-full">
               <Heart className="h-4 w-4 text-red-500 fill-red-500" />
@@ -248,13 +312,15 @@ export default function FeedPage() {
           )}
 
           {/* Current user profile */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <UserProfileCard
-              userProfile={currentUserProfile}
-              onSwipe={handleSwipe}
-              onCommentAdded={handleCommentAdded}
-            />
-          </div>
+          {currentUserProfile && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <UserProfileCard
+                userProfile={currentUserProfile}
+                onSwipe={handleSwipe}
+                onCommentAdded={handleCommentAdded}
+              />
+            </div>
+          )}
 
           {/* Like Animation */}
           {showAnimation === "like" && (
