@@ -42,7 +42,7 @@ export function SwipeCards() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-8rem)] px-4 py-6">
-      <MemeCard meme={currentMeme} showComments={showComments} onToggleComments={handleComment} />
+      <MemeCard meme={currentMeme} onLike={handleLike} onDislike={handlePass} onComment={handleComment} />
 
       <div className="flex items-center justify-center gap-6 mt-8">
         <Button

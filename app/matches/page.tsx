@@ -1,35 +1,133 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { BottomNav } from "@/components/bottom-nav"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
-import { Flame, MessageCircle } from "lucide-react"
-import type { UserProfile } from "@/lib/mock-data"
-import { mockUserProfiles } from "@/lib/mock-data"
+import { MemeDetailModal } from "@/components/meme-detail-modal"
+import { useAuth } from "@/lib/auth-context"
+import { 
+  matchesApi, 
+  usersApi, 
+  memesApi,
+  transformMemeToFrontend,
+  transformCommentToFrontend,
+  transformUserToFrontendProfile,
+  type FrontendUserProfile,
+  type FrontendMeme
+} from "@/lib/api"
+import { Flame, MessageCircle, Heart } from "lucide-react"
 import Image from "next/image"
-import { useRouter } from "next/navigation"
 
 export default function MatchesPage() {
-  const [matchedUsers, setMatchedUsers] = useState<UserProfile[]>([])
-  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null)
-  const [profileDialogOpen, setProfileDialogOpen] = useState(false)
+  const { user, isAuthenticated, loading: authLoading } = useAuth()
   const router = useRouter()
+  const [matchedUsers, setMatchedUsers] = useState<FrontendUserProfile[]>([])
+  const [matchIds, setMatchIds] = useState<Map<string, number>>(new Map()) // userId -> matchId
+  const [selectedUser, setSelectedUser] = useState<FrontendUserProfile | null>(null)
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false)
+  const [selectedMeme, setSelectedMeme] = useState<FrontendMeme | null>(null)
+  const [memeDetailOpen, setMemeDetailOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const matches = mockUserProfiles.filter((user) => user.hasLikedYou)
-    setMatchedUsers(matches)
-  }, [])
+    if (!authLoading) {
+      if (!isAuthenticated || !user) {
+        router.push('/login')
+      } else {
+        loadMatches()
+      }
+    }
+  }, [isAuthenticated, authLoading, user, router])
 
-  const handleViewProfile = (user: UserProfile) => {
+  const loadMatches = async () => {
+    if (!user) return
+    
+    try {
+      setLoading(true)
+      const matches = await matchesApi.getByUser(user.id)
+      
+      // Create map of userId -> matchId
+      const matchIdMap = new Map<string, number>()
+      matches.forEach(m => {
+        const otherUserId = m.user1.id === user.id ? m.user2.id : m.user1.id
+        matchIdMap.set(otherUserId.toString(), m.id)
+      })
+      setMatchIds(matchIdMap)
+      
+      // Get matched users
+      const matchedUserIds = matches.map(m => 
+        m.user1.id === user.id ? m.user2.id : m.user1.id
+      )
+      
+      // Load user profiles
+      const profilesPromises = matchedUserIds.map(async (matchedUserId) => {
+        try {
+          const matchedUser = await usersApi.getById(matchedUserId)
+          const memes = await memesApi.getByUser(matchedUserId)
+          
+          const transformedMemes = await Promise.all(
+            memes.map(async (meme) => {
+              try {
+                const { likesApi, commentsApi } = await import('@/lib/api')
+                const [likeCountRes, comments] = await Promise.all([
+                  likesApi.getCount(meme.id),
+                  commentsApi.getByMeme(meme.id)
+                ])
+                const frontendComments = comments.map(transformCommentToFrontend)
+                return transformMemeToFrontend(meme, likeCountRes.count, frontendComments)
+              } catch (err) {
+                return transformMemeToFrontend(meme, 0, [])
+              }
+            })
+          )
+          
+          return transformUserToFrontendProfile(matchedUser, transformedMemes)
+        } catch (err) {
+          console.error(`Error loading matched user ${matchedUserId}:`, err)
+          return null
+        }
+      })
+      
+      const profiles = (await Promise.all(profilesPromises)).filter((p): p is FrontendUserProfile => p !== null)
+      setMatchedUsers(profiles)
+    } catch (err) {
+      console.error('Error loading matches:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleViewProfile = (user: FrontendUserProfile) => {
     setSelectedUser(user)
     setProfileDialogOpen(true)
   }
 
   const handleStartChat = (userId: string) => {
-    router.push(`/chat/${userId}`)
+    const matchId = matchIds.get(userId)
+    console.log('Starting chat:', { userId, matchId, matchIds: Array.from(matchIds.entries()) })
+    if (matchId) {
+      router.push(`/chat/${matchId}`)
+    } else {
+      console.error('No matchId found for user:', userId)
+      alert('Unable to start chat. Please try again.')
+    }
+  }
+
+  const handleMemeClick = (meme: FrontendMeme) => {
+    setSelectedMeme(meme)
+    setMemeDetailOpen(true)
+  }
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    )
   }
 
   return (
@@ -88,7 +186,6 @@ export default function MatchesPage() {
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden">
           {selectedUser && (
             <div className="overflow-y-auto max-h-[80vh]">
-              {/* Profile Header Section */}
               <div className="flex flex-col items-center text-center p-6 border-b border-border">
                 <Avatar className="h-32 w-32 border-4 border-primary mb-4">
                   <AvatarImage src={selectedUser.avatar || "/placeholder.svg"} alt={selectedUser.name} />
@@ -97,7 +194,6 @@ export default function MatchesPage() {
                 <h2 className="text-2xl font-bold mb-2">{selectedUser.name}</h2>
                 <p className="text-muted-foreground max-w-md mb-4">{selectedUser.bio}</p>
 
-                {/* Stats Row */}
                 <div className="flex items-center justify-center gap-8 w-full py-4 border-y border-border my-4">
                   <div className="text-center">
                     <div className="font-bold text-xl">{selectedUser.stats?.totalMemes}</div>
@@ -125,14 +221,14 @@ export default function MatchesPage() {
                 </Button>
               </div>
 
-              {/* Memes Grid Section */}
               <div className="p-6">
                 <h3 className="text-lg font-semibold mb-4">Memes</h3>
                 <div className="grid grid-cols-3 gap-2">
                   {selectedUser.memes.map((meme) => (
                     <div
                       key={meme.id}
-                      className="relative aspect-square rounded-lg overflow-hidden group cursor-pointer"
+                      className="relative aspect-square rounded-lg overflow-hidden group cursor-pointer hover:shadow-lg transition-shadow"
+                      onClick={() => handleMemeClick(meme)}
                     >
                       <Image
                         src={meme.imageUrl || "/placeholder.svg"}
@@ -141,8 +237,15 @@ export default function MatchesPage() {
                         className="object-cover"
                         unoptimized
                       />
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2">
-                        <p className="text-white text-xs text-center line-clamp-3">{meme.caption}</p>
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2 gap-3">
+                        <div className="flex items-center gap-1 text-white">
+                          <Heart className="h-4 w-4 fill-white" />
+                          <span className="text-xs font-medium">{meme.likes}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-white">
+                          <MessageCircle className="h-4 w-4" />
+                          <span className="text-xs font-medium">{meme.comments.length}</span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -152,6 +255,12 @@ export default function MatchesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <MemeDetailModal
+        meme={selectedMeme}
+        open={memeDetailOpen}
+        onOpenChange={setMemeDetailOpen}
+      />
 
       <BottomNav />
     </main>

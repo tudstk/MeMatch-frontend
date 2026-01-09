@@ -8,71 +8,131 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { type Meme, currentUser } from "@/lib/mock-data"
+import { useAuth } from "@/lib/auth-context"
+import { 
+  commentsApi, 
+  likesApi, 
+  transformCommentToFrontend,
+  type FrontendMeme,
+  type FrontendComment
+} from "@/lib/api"
 import { Heart, MessageCircle, Send } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 
 interface MemeDetailModalProps {
-  meme: Meme | null
+  meme: FrontendMeme | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onMemeUpdate?: (updatedMeme: Meme) => void
+  onMemeUpdate?: (updatedMeme: FrontendMeme) => void
 }
 
 export function MemeDetailModal({ meme, open, onOpenChange, onMemeUpdate }: MemeDetailModalProps) {
+  const { user } = useAuth()
   const [comment, setComment] = useState("")
-  const [localMeme, setLocalMeme] = useState<Meme | null>(meme)
+  const [localMeme, setLocalMeme] = useState<FrontendMeme | null>(meme)
   const [isLiked, setIsLiked] = useState(false)
+  const [likeCount, setLikeCount] = useState(0)
+  const [comments, setComments] = useState<FrontendComment[]>([])
+  const [loading, setLoading] = useState(false)
+  const [commentLoading, setCommentLoading] = useState(false)
 
   useEffect(() => {
-    if (meme) {
+    if (meme && open) {
       setLocalMeme(meme)
-      setIsLiked(false)
+      setComments(meme.comments || [])
+      setLikeCount(meme.likes || 0)
+      loadLikeStatus()
+      loadComments()
     }
-  }, [meme])
+  }, [meme, open])
 
-  const handleLike = () => {
-    if (!localMeme) return
-
-    const newIsLiked = !isLiked
-    setIsLiked(newIsLiked)
-
-    const updatedMeme = {
-      ...localMeme,
-      likes: newIsLiked ? localMeme.likes + 1 : localMeme.likes - 1,
-    }
-
-    setLocalMeme(updatedMeme)
-
-    if (onMemeUpdate) {
-      onMemeUpdate(updatedMeme)
+  const loadLikeStatus = async () => {
+    if (!meme || !user) return
+    
+    try {
+      const status = await likesApi.checkStatus(user.id, parseInt(meme.id))
+      setIsLiked(status.hasLiked)
+    } catch (err) {
+      console.error('Error loading like status:', err)
     }
   }
 
-  const handleSubmitComment = (e: React.FormEvent) => {
+  const loadComments = async () => {
+    if (!meme) return
+    
+    try {
+      const backendComments = await commentsApi.getByMeme(parseInt(meme.id))
+      const frontendComments = backendComments.map(transformCommentToFrontend)
+      setComments(frontendComments)
+    } catch (err) {
+      console.error('Error loading comments:', err)
+    }
+  }
+
+  const handleLike = async () => {
+    if (!localMeme || !user) return
+
+    setLoading(true)
+    try {
+      if (isLiked) {
+        await likesApi.unlike(user.id, parseInt(localMeme.id))
+        setIsLiked(false)
+        setLikeCount(prev => prev - 1)
+      } else {
+        await likesApi.like(user.id, parseInt(localMeme.id))
+        setIsLiked(true)
+        setLikeCount(prev => prev + 1)
+      }
+
+      const updatedMeme = {
+        ...localMeme,
+        likes: likeCount + (isLiked ? -1 : 1),
+      }
+      setLocalMeme(updatedMeme)
+
+      if (onMemeUpdate) {
+        onMemeUpdate(updatedMeme)
+      }
+    } catch (err: any) {
+      console.error('Error toggling like:', err)
+      alert(err.message || 'Failed to update like')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!comment.trim() || !localMeme) return
+    if (!comment.trim() || !localMeme || !user) return
 
-    const newComment = {
-      id: `c${Date.now()}`,
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userAvatar: currentUser.avatar,
-      text: comment,
-      createdAt: new Date().toISOString(),
-    }
+    setCommentLoading(true)
+    try {
+      const newComment = await commentsApi.create(
+        user.id,
+        parseInt(localMeme.id),
+        comment.trim()
+      )
+      
+      const frontendComment = transformCommentToFrontend(newComment)
+      const updatedComments = [...comments, frontendComment]
+      setComments(updatedComments)
+      setComment("")
 
-    const updatedMeme = {
-      ...localMeme,
-      comments: [...localMeme.comments, newComment],
-    }
+      const updatedMeme = {
+        ...localMeme,
+        comments: updatedComments,
+      }
+      setLocalMeme(updatedMeme)
 
-    setLocalMeme(updatedMeme)
-    setComment("")
-
-    if (onMemeUpdate) {
-      onMemeUpdate(updatedMeme)
+      if (onMemeUpdate) {
+        onMemeUpdate(updatedMeme)
+      }
+    } catch (err: any) {
+      console.error('Error adding comment:', err)
+      alert(err.message || 'Failed to add comment')
+    } finally {
+      setCommentLoading(false)
     }
   }
 
@@ -116,12 +176,12 @@ export function MemeDetailModal({ meme, open, onOpenChange, onMemeUpdate }: Meme
             {/* Comments section */}
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-4">
-                {localMeme.comments.length === 0 ? (
+                {comments.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8 text-sm">
                     No comments yet. Be the first to comment!
                   </p>
                 ) : (
-                  localMeme.comments.map((c) => (
+                  comments.map((c) => (
                     <div key={c.id} className="flex gap-3">
                       <Avatar className="h-8 w-8 flex-shrink-0">
                         <AvatarImage src={c.userAvatar || "/placeholder.svg"} alt={c.userName} />
@@ -149,15 +209,15 @@ export function MemeDetailModal({ meme, open, onOpenChange, onMemeUpdate }: Meme
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={cn("gap-2 hover:text-green-500", isLiked && "text-green-500")}
+                  className={cn("gap-2 hover:text-red-500", isLiked && "text-red-500")}
                   onClick={handleLike}
                 >
-                  <Heart className={cn("h-5 w-5", isLiked && "fill-green-500")} />
-                  <span className="font-medium">{localMeme.likes.toLocaleString()}</span>
+                  <Heart className={cn("h-5 w-5", isLiked && "fill-red-500")} />
+                  <span className="font-medium">{likeCount.toLocaleString()}</span>
                 </Button>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <MessageCircle className="h-5 w-5" />
-                  <span className="text-sm font-medium">{localMeme.comments.length}</span>
+                  <span className="text-sm font-medium">{comments.length}</span>
                 </div>
               </div>
 
@@ -169,7 +229,7 @@ export function MemeDetailModal({ meme, open, onOpenChange, onMemeUpdate }: Meme
                   onChange={(e) => setComment(e.target.value)}
                   className="flex-1"
                 />
-                <Button type="submit" size="icon" disabled={!comment.trim()}>
+                <Button type="submit" size="icon">
                   <Send className="h-4 w-4" />
                 </Button>
               </form>

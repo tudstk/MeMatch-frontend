@@ -1,36 +1,150 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { UserProfileCard } from "@/components/user-profile-card"
 import { BottomNav } from "@/components/bottom-nav"
 import { MatchAnimation } from "@/components/match-animation"
-import { mockUserProfiles, type UserProfile } from "@/lib/mock-data"
+import { useAuth } from "@/lib/auth-context"
+import { 
+  usersApi, 
+  memesApi, 
+  likesApi, 
+  commentsApi, 
+  matchesApi,
+  transformMemeToFrontend,
+  transformCommentToFrontend,
+  transformUserToFrontendProfile,
+  type FrontendUserProfile,
+  type FrontendMeme
+} from "@/lib/api"
 import { Flame, Heart, X } from "lucide-react"
 
 export default function FeedPage() {
-  const [userProfiles, setUserProfiles] = useState<UserProfile[]>(mockUserProfiles)
+  const { isAuthenticated, loading: authLoading, user } = useAuth()
+  const router = useRouter()
+  const [userProfiles, setUserProfiles] = useState<FrontendUserProfile[]>([])
   const [currentUserIndex, setCurrentUserIndex] = useState(0)
   const [likeCount, setLikeCount] = useState(0)
   const [rejectCount, setRejectCount] = useState(0)
   const [showAnimation, setShowAnimation] = useState<"like" | "reject" | null>(null)
   const [showMatchAnimation, setShowMatchAnimation] = useState(false)
-  const [matchedUser, setMatchedUser] = useState<UserProfile | null>(null)
-  const [matchedUsers, setMatchedUsers] = useState<UserProfile[]>([])
+  const [matchedUser, setMatchedUser] = useState<FrontendUserProfile | null>(null)
+  const [matchedUsers, setMatchedUsers] = useState<FrontendUserProfile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const currentUserProfile = userProfiles[currentUserIndex]
-  const nextUserProfile = userProfiles[currentUserIndex + 1]
+  useEffect(() => {
+    if (!authLoading) {
+      if (!isAuthenticated) {
+        router.push('/login')
+      } else {
+        loadUserProfiles()
+      }
+    }
+  }, [isAuthenticated, authLoading, router])
 
-  const handleSwipe = (direction: "left" | "right") => {
+  const loadUserProfiles = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      // Get all users
+      const users = await usersApi.getAll()
+      
+      // Filter out current user
+      const currentUserId = user?.id
+      const otherUsers = users.filter(u => u.id !== currentUserId)
+      
+      // Load profiles with memes for each user
+      const profilesPromises = otherUsers.map(async (user) => {
+        try {
+          const memes = await memesApi.getByUser(user.id)
+          
+          // Transform memes to frontend format with likes and comments
+          const transformedMemes = await Promise.all(
+            memes.map(async (meme) => {
+              try {
+                const [likeCountRes, comments] = await Promise.all([
+                  likesApi.getCount(meme.id),
+                  commentsApi.getByMeme(meme.id)
+                ])
+                
+                const frontendComments = comments.map(transformCommentToFrontend)
+                
+                return transformMemeToFrontend(meme, likeCountRes.count, frontendComments)
+              } catch (err) {
+                console.error(`Error loading meme ${meme.id}:`, err)
+                return transformMemeToFrontend(meme, 0, [])
+              }
+            })
+          )
+          
+          return transformUserToFrontendProfile(user, transformedMemes)
+        } catch (err) {
+          console.error(`Error loading profile for user ${user.id}:`, err)
+          return null
+        }
+      })
+      
+      const profiles = (await Promise.all(profilesPromises)).filter((p): p is FrontendUserProfile => p !== null)
+      
+      // Check which users have liked the current user (for potential matches)
+      if (currentUserId) {
+        // Check for each profile if they have liked the current user
+        const hasLikedChecks = await Promise.all(
+          profiles.map(async (profile) => {
+            try {
+              const profileUserId = parseInt(profile.id)
+              const hasLiked = await matchesApi.hasUserLikedUser(profileUserId, currentUserId)
+              return { profileId: profile.id, hasLiked: hasLiked.hasLiked }
+            } catch (err) {
+              console.error(`Error checking if user ${profile.id} has liked current user:`, err)
+              return { profileId: profile.id, hasLiked: false }
+            }
+          })
+        )
+        
+        // Update profiles with hasLikedYou status
+        profiles.forEach(profile => {
+          const check = hasLikedChecks.find(c => c.profileId === profile.id)
+          profile.hasLikedYou = check?.hasLiked || false
+        })
+      }
+      
+      setUserProfiles(profiles)
+    } catch (err: any) {
+      console.error('Error loading user profiles:', err)
+      setError(err.message || 'Failed to load profiles')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSwipe = async (direction: "left" | "right") => {
+    if (!user || !currentUserProfile) return
+
     if (direction === "right") {
       setLikeCount((prev) => prev + 1)
       setShowAnimation("like")
 
-      if (currentUserProfile.hasLikedYou) {
-        setTimeout(() => {
-          setMatchedUser(currentUserProfile)
-          setShowMatchAnimation(true)
-          setMatchedUsers((prev) => [...prev, currentUserProfile])
-        }, 800)
+      // Like the user (not their memes)
+      try {
+        const currentUserId = parseInt(currentUserProfile.id)
+        
+        // Like the user - this will create a match if mutual
+        const result = await matchesApi.likeUser(user.id, currentUserId)
+        
+        // If it's a match, show the match animation
+        if (result.isMatch) {
+          setTimeout(() => {
+            setMatchedUser(currentUserProfile)
+            setShowMatchAnimation(true)
+            setMatchedUsers((prev) => [...prev, currentUserProfile])
+          }, 800)
+        }
+      } catch (err) {
+        console.error('Error liking user:', err)
       }
     } else {
       setRejectCount((prev) => prev + 1)
@@ -44,22 +158,53 @@ export default function FeedPage() {
     if (currentUserIndex < userProfiles.length - 1) {
       setCurrentUserIndex(currentUserIndex + 1)
     } else {
+      // Reload profiles when we run out
+      loadUserProfiles()
       setCurrentUserIndex(0)
     }
   }
 
-  const handleCommentAdded = (memeId: string, updatedComments: any[]) => {
+  const handleCommentAdded = async (memeId: string, updatedComments: any[]) => {
     setUserProfiles((prevProfiles) =>
       prevProfiles.map((profile) => ({
         ...profile,
-        memes: profile.memes.map((meme) => (meme.id === memeId ? { ...meme, comments: updatedComments } : meme)),
-      })),
+        memes: profile.memes.map((meme) => 
+          meme.id === memeId ? { ...meme, comments: updatedComments } : meme
+        ),
+      }))
     )
   }
 
   const handleMatchAnimationComplete = () => {
     setShowMatchAnimation(false)
     setMatchedUser(null)
+  }
+
+  const currentUserProfile = userProfiles[currentUserIndex]
+  const nextUserProfile = userProfiles[currentUserIndex + 1]
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">{error}</p>
+          <button 
+            onClick={loadUserProfiles}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (!currentUserProfile) {

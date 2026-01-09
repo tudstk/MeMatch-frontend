@@ -2,7 +2,8 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { BottomNav } from "@/components/bottom-nav"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -11,26 +12,115 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { MemeDetailModal } from "@/components/meme-detail-modal"
-import { currentUser, type Meme } from "@/lib/mock-data"
-import { Camera, Upload, Heart, MessageCircle } from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
+import { 
+  usersApi, 
+  memesApi, 
+  transformMemeToFrontend,
+  transformCommentToFrontend,
+  transformUserToFrontendProfile,
+  type FrontendMeme
+} from "@/lib/api"
+import { Camera, Upload, Heart, MessageCircle, LogOut } from "lucide-react"
 import Image from "next/image"
+import { uploadProfilePicture, uploadMemeImage } from "@/lib/firebase-storage"
 
 export default function ProfilePage() {
-  const [user, setUser] = useState(currentUser)
+  const { user, isAuthenticated, loading: authLoading, logout } = useAuth()
+  const router = useRouter()
+  const [userProfile, setUserProfile] = useState<any>(null)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
-  const [selectedMeme, setSelectedMeme] = useState<Meme | null>(null)
+  const [profilePictureDialogOpen, setProfilePictureDialogOpen] = useState(false)
+  const [selectedMeme, setSelectedMeme] = useState<FrontendMeme | null>(null)
   const [memeDetailOpen, setMemeDetailOpen] = useState(false)
-  const [name, setName] = useState(user.name)
-  const [bio, setBio] = useState(user.bio)
+  const [name, setName] = useState("")
+  const [bio, setBio] = useState("")
   const [memeCaption, setMemeCaption] = useState("")
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
 
-  const handleSaveProfile = () => {
-    setUser({ ...user, name, bio })
-    setEditDialogOpen(false)
+  useEffect(() => {
+    if (!authLoading) {
+      if (!isAuthenticated || !user) {
+        router.push('/login')
+      } else {
+        loadProfile()
+      }
+    }
+  }, [isAuthenticated, authLoading, user, router])
+
+  const loadProfile = async () => {
+    if (!user) return
+    
+    try {
+      setLoading(true)
+      const userData = await usersApi.getById(user.id)
+      const memes = await memesApi.getByUser(user.id)
+      
+      // Transform memes
+      const transformedMemes = await Promise.all(
+        memes.map(async (meme) => {
+          try {
+            const { likesApi, commentsApi } = await import('@/lib/api')
+            const [likeCountRes, comments] = await Promise.all([
+              likesApi.getCount(meme.id),
+              commentsApi.getByMeme(meme.id)
+            ])
+            const frontendComments = comments.map(transformCommentToFrontend)
+            return transformMemeToFrontend(meme, likeCountRes.count, frontendComments)
+          } catch (err) {
+            return transformMemeToFrontend(meme, 0, [])
+          }
+        })
+      )
+      
+      const profile = transformUserToFrontendProfile(userData, transformedMemes)
+      setUserProfile(profile)
+      setName(profile.name)
+      setBio(profile.bio)
+    } catch (err) {
+      console.error('Error loading profile:', err)
+    } finally {
+      setLoading(false)
+    }
   }
+
+  const handleSaveProfile = async () => {
+    if (!user) return
+    
+    try {
+      let profilePictureUrl = userProfile?.avatar
+      
+      // Upload profile picture if a new file is selected
+      if (selectedFile) {
+        setUploading(true)
+        setUploadProgress(0)
+        try {
+          profilePictureUrl = await uploadProfilePicture(user.id, selectedFile)
+          setUploadProgress(100)
+        } catch (err: any) {
+          alert(err.message || 'Failed to upload profile picture')
+          setUploading(false)
+          return
+        }
+        setUploading(false)
+      }
+      
+      await usersApi.updateProfile(user.id, bio, profilePictureUrl)
+      setSelectedFile(null)
+      setPreviewUrl(null)
+      await loadProfile()
+      setEditDialogOpen(false)
+      setProfilePictureDialogOpen(false)
+    } catch (err: any) {
+      alert(err.message || 'Failed to update profile')
+    }
+  }
+
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -41,41 +131,63 @@ export default function ProfilePage() {
     }
   }
 
-  const handleUploadMeme = () => {
-    if (!memeCaption.trim()) return
+  const handleUploadMeme = async () => {
+    if (!memeCaption.trim() || !user || !selectedFile) return
 
-    const newMeme = {
-      id: `my${Date.now()}`,
-      imageUrl: previewUrl || `/placeholder.svg?height=600&width=500&query=new meme ${Date.now()}`,
-      caption: memeCaption,
-      author: {
-        id: user.id,
-        name: user.name,
-        avatar: user.avatar,
-      },
-      likes: 0,
-      comments: [],
-      createdAt: new Date().toISOString(),
+    try {
+      setUploading(true)
+      setUploadProgress(0)
+      
+      // Upload meme image to Firebase
+      const imageUrl = await uploadMemeImage(user.id, selectedFile)
+      setUploadProgress(100)
+      
+      // Create meme with Firebase URL
+      await memesApi.create(user.id, imageUrl, memeCaption)
+      
+      setMemeCaption("")
+      setSelectedFile(null)
+      setPreviewUrl(null)
+      setUploadDialogOpen(false)
+      setUploading(false)
+      setUploadProgress(0)
+      await loadProfile()
+    } catch (err: any) {
+      setUploading(false)
+      setUploadProgress(0)
+      alert(err.message || 'Failed to upload meme')
     }
-
-    setUser({ ...user, memes: [newMeme, ...user.memes] })
-    setMemeCaption("")
-    setSelectedFile(null)
-    setPreviewUrl(null)
-    setUploadDialogOpen(false)
   }
 
-  const handleMemeClick = (meme: Meme) => {
+  const handleMemeClick = (meme: FrontendMeme) => {
     setSelectedMeme(meme)
     setMemeDetailOpen(true)
   }
 
-  const handleMemeUpdate = (updatedMeme: Meme) => {
-    setUser({
-      ...user,
-      memes: user.memes.map((m) => (m.id === updatedMeme.id ? updatedMeme : m)),
+  const handleMemeUpdate = (updatedMeme: FrontendMeme) => {
+    setUserProfile({
+      ...userProfile,
+      memes: userProfile.memes.map((m: FrontendMeme) => (m.id === updatedMeme.id ? updatedMeme : m)),
     })
     setSelectedMeme(updatedMeme)
+  }
+
+  const handleLogout = () => {
+    logout()
+    router.push('/login')
+  }
+
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    )
+  }
+
+  if (!userProfile) {
+    return null
   }
 
   return (
@@ -85,40 +197,100 @@ export default function ProfilePage() {
           <div className="absolute -bottom-16 md:-bottom-20 left-1/2 md:left-12 lg:left-16 -translate-x-1/2 md:translate-x-0">
             <div className="relative">
               <Avatar className="h-32 w-32 md:h-40 md:w-40 border-4 md:border-6 border-background shadow-xl">
-                <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
-                <AvatarFallback className="text-3xl md:text-4xl">{user.name[0]}</AvatarFallback>
+                <AvatarImage src={userProfile.avatar || "/placeholder.svg"} alt={userProfile.name} />
+                <AvatarFallback className="text-3xl md:text-4xl">{userProfile.name[0]}</AvatarFallback>
               </Avatar>
-              <Button
-                size="icon"
-                variant="secondary"
-                className="absolute bottom-0 right-0 h-10 w-10 md:h-12 md:w-12 rounded-full shadow-lg"
-              >
-                <Camera className="h-5 w-5 md:h-6 md:w-6" />
-              </Button>
+              <Dialog open={profilePictureDialogOpen} onOpenChange={setProfilePictureDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="secondary"
+                    className="absolute bottom-0 right-0 h-10 w-10 md:h-12 md:w-12 rounded-full shadow-lg"
+                  >
+                    <Camera className="h-5 w-5 md:h-6 md:w-6" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Change Profile Picture</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    {previewUrl ? (
+                      <div className="relative aspect-square rounded-lg overflow-hidden">
+                        <Image src={previewUrl} alt="Preview" fill className="object-cover" />
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center p-8 border-2 border-dashed border-border rounded-lg">
+                        <div className="text-center">
+                          <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                          <p className="text-sm text-muted-foreground mb-2">Click to upload image</p>
+                          <p className="text-xs text-muted-foreground">PNG, JPG up to 10MB</p>
+                        </div>
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          setSelectedFile(file)
+                          const url = URL.createObjectURL(file)
+                          setPreviewUrl(url)
+                        }
+                      }}
+                      className="hidden"
+                      id="profile-picture-upload"
+                    />
+                    <label
+                      htmlFor="profile-picture-upload"
+                      className="block w-full px-4 py-2 bg-primary text-primary-foreground rounded cursor-pointer hover:bg-primary/90 text-center"
+                    >
+                      {previewUrl ? 'Change Image' : 'Select Image'}
+                    </label>
+                    {previewUrl && (
+                      <Button 
+                        className="w-full" 
+                        onClick={handleSaveProfile}
+                        disabled={uploading}
+                      >
+                        {uploading ? `Uploading... ${uploadProgress}%` : 'Save Profile Picture'}
+                      </Button>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </div>
 
         <div className="pt-20 md:pt-24 space-y-6 md:space-y-8">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
-            {/* Profile info section */}
             <div className="text-center md:text-left md:flex-1 space-y-3 md:space-y-4">
-              <h1 className="text-3xl md:text-4xl font-bold">{user.name}</h1>
-              <p className="text-base md:text-lg text-muted-foreground leading-relaxed max-w-2xl">{user.bio}</p>
+              <h1 className="text-3xl md:text-4xl font-bold">{userProfile.name}</h1>
+              <p className="text-base md:text-lg text-muted-foreground leading-relaxed max-w-2xl">{userProfile.bio}</p>
 
               <div className="flex items-center justify-center md:justify-start gap-8 md:gap-12 pt-2">
                 <div className="text-center md:text-left">
-                  <p className="text-3xl md:text-4xl font-bold">{user.memes.length}</p>
+                  <p className="text-3xl md:text-4xl font-bold">{userProfile.memes.length}</p>
                   <p className="text-sm md:text-base text-muted-foreground">Memes</p>
                 </div>
                 <div className="text-center md:text-left">
-                  <p className="text-3xl md:text-4xl font-bold">{user.memes.reduce((acc, m) => acc + m.likes, 0)}</p>
+                  <p className="text-3xl md:text-4xl font-bold">{userProfile.memes.reduce((acc: number, m: FrontendMeme) => acc + m.likes, 0)}</p>
                   <p className="text-sm md:text-base text-muted-foreground">Likes</p>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-3 md:gap-4 md:pt-2">
+            <div className="flex flex-wrap gap-3 md:gap-4 md:pt-2 justify-center md:justify-end">
+              <Button 
+                variant="outline" 
+                className="flex-1 md:flex-none md:px-8 bg-transparent text-base text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                onClick={handleLogout}
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
               <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" className="flex-1 md:flex-none md:px-8 bg-transparent text-base">
@@ -185,8 +357,12 @@ export default function ProfilePage() {
                         rows={3}
                       />
                     </div>
-                    <Button onClick={handleUploadMeme} className="w-full" disabled={!memeCaption.trim()}>
-                      Upload
+                    <Button 
+                      onClick={handleUploadMeme} 
+                      className="w-full" 
+                      disabled={!memeCaption.trim() || !selectedFile || uploading}
+                    >
+                      {uploading ? `Uploading... ${uploadProgress}%` : 'Upload'}
                     </Button>
                   </div>
                 </DialogContent>
@@ -197,7 +373,7 @@ export default function ProfilePage() {
           <div className="space-y-4 md:space-y-6">
             <h2 className="text-xl md:text-2xl font-semibold">Your Memes</h2>
             <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 md:gap-3 lg:gap-4">
-              {user.memes.map((meme) => (
+              {userProfile.memes.map((meme: FrontendMeme) => (
                 <Card
                   key={meme.id}
                   className="overflow-hidden group cursor-pointer hover:shadow-lg transition-shadow"

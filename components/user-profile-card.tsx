@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useRef } from "react"
-import type { UserProfile, Meme } from "@/lib/mock-data"
+import type { FrontendUserProfile, FrontendMeme } from "@/lib/api"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Heart, X, MessageCircle, ChevronLeft, ChevronRight, Maximize } from "lucide-react"
@@ -12,14 +12,14 @@ import Image from "next/image"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 
 interface UserProfileCardProps {
-  userProfile: UserProfile
+  userProfile: FrontendUserProfile
   onSwipe: (direction: "left" | "right") => void
   onCommentAdded: (memeId: string, updatedComments: any[]) => void
 }
 
 export function UserProfileCard({ userProfile, onSwipe, onCommentAdded }: UserProfileCardProps) {
   const [currentMemeIndex, setCurrentMemeIndex] = useState(0)
-  const [selectedMeme, setSelectedMeme] = useState<Meme | null>(null)
+  const [selectedMeme, setSelectedMeme] = useState<FrontendMeme | null>(null)
   const [commentDialogOpen, setCommentDialogOpen] = useState(false)
   const [imageViewerOpen, setImageViewerOpen] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -116,6 +116,8 @@ export function UserProfileCard({ userProfile, onSwipe, onCommentAdded }: UserPr
   const rotation = dragOffset.x / 20
   const opacity = Math.min(Math.abs(dragOffset.x) / 100, 1)
 
+  if (!currentMeme) return null
+
   return (
     <>
       <div
@@ -158,7 +160,7 @@ export function UserProfileCard({ userProfile, onSwipe, onCommentAdded }: UserPr
         <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black/70 to-transparent p-6">
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16 border-2 border-white">
-              <AvatarImage src={userProfile.avatar || "/placeholder.svg"} alt={userProfile.name} />
+              <AvatarImage src={userProfile?.avatar || "/placeholder.svg"} alt={userProfile.name} />
               <AvatarFallback>{userProfile.name[0]}</AvatarFallback>
             </Avatar>
             <div className="flex-1 text-white">
@@ -197,8 +199,8 @@ export function UserProfileCard({ userProfile, onSwipe, onCommentAdded }: UserPr
         {/* Meme Image */}
         <div className="relative w-full h-full">
           <Image
-            src={currentMeme.imageUrl || "/placeholder.svg"}
-            alt={currentMeme.caption}
+            src={currentMeme?.imageUrl || "/placeholder.svg"}
+            alt={currentMeme?.caption}
             fill
             className="object-cover"
             priority
@@ -226,7 +228,7 @@ export function UserProfileCard({ userProfile, onSwipe, onCommentAdded }: UserPr
 
         {/* Meme Caption */}
         <div className="absolute bottom-32 left-0 right-0 z-20 bg-gradient-to-t from-black/70 to-transparent p-6">
-          <p className="text-white text-lg font-medium">{currentMeme.caption}</p>
+          <p className="text-white text-lg font-medium">{currentMeme?.caption}</p>
           <p className="text-white/70 text-sm mt-1">
             {currentMemeIndex + 1} of {userProfile.memes.length}
           </p>
@@ -265,8 +267,8 @@ export function UserProfileCard({ userProfile, onSwipe, onCommentAdded }: UserPr
         <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95 border-none">
           <div className="relative w-full h-[95vh] flex items-center justify-center">
             <Image
-              src={currentMeme.imageUrl || "/placeholder.svg"}
-              alt={currentMeme.caption}
+              src={currentMeme?.imageUrl || "/placeholder.svg"}
+              alt={currentMeme?.caption}
               fill
               className="object-contain"
               unoptimized

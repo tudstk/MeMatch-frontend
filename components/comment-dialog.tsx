@@ -8,45 +8,68 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { type Meme, currentUser } from "@/lib/mock-data"
+import { type FrontendMeme, type FrontendComment } from "@/lib/api"
+import { commentsApi, transformCommentToFrontend } from "@/lib/api"
+import { useAuth } from "@/lib/auth-context"
 import { Send } from "lucide-react"
 
 interface CommentDialogProps {
-  meme: Meme | null
+  meme: FrontendMeme | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onCommentAdded?: (memeId: string, updatedComments: any[]) => void
+  onCommentAdded?: (memeId: string, updatedComments: FrontendComment[]) => void
 }
 
 export function CommentDialog({ meme, open, onOpenChange, onCommentAdded }: CommentDialogProps) {
+  const { user } = useAuth()
   const [comment, setComment] = useState("")
-  const [comments, setComments] = useState(meme?.comments || [])
+  const [comments, setComments] = useState<FrontendComment[]>(meme?.comments || [])
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (meme) {
-      setComments(meme.comments)
+      loadComments()
     }
-  }, [meme])
+  }, [meme, open])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const loadComments = async () => {
+    if (!meme) return
+    
+    try {
+      const backendComments = await commentsApi.getByMeme(parseInt(meme.id))
+      const frontendComments = backendComments.map(transformCommentToFrontend)
+      setComments(frontendComments)
+    } catch (err) {
+      console.error('Error loading comments:', err)
+      setComments(meme.comments || [])
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!comment.trim() || !meme) return
+    if (!comment.trim() || !meme || !user) return
 
-    const newComment = {
-      id: `c${Date.now()}`,
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userAvatar: currentUser.avatar,
-      text: comment,
-      createdAt: new Date().toISOString(),
-    }
+    setLoading(true)
+    try {
+      const newComment = await commentsApi.create(
+        user.id,
+        parseInt(meme.id),
+        comment.trim()
+      )
+      
+      const frontendComment = transformCommentToFrontend(newComment)
+      const updatedComments = [...comments, frontendComment]
+      setComments(updatedComments)
+      setComment("")
 
-    const updatedComments = [...comments, newComment]
-    setComments(updatedComments)
-    setComment("")
-
-    if (onCommentAdded) {
-      onCommentAdded(meme.id, updatedComments)
+      if (onCommentAdded) {
+        onCommentAdded(meme.id, updatedComments)
+      }
+    } catch (err: any) {
+      console.error('Error adding comment:', err)
+      alert(err.message || 'Failed to add comment')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -90,7 +113,7 @@ export function CommentDialog({ meme, open, onOpenChange, onCommentAdded }: Comm
             onChange={(e) => setComment(e.target.value)}
             className="flex-1"
           />
-          <Button type="submit" size="icon" disabled={!comment.trim()}>
+          <Button type="submit" size="icon">
             <Send className="h-4 w-4" />
           </Button>
         </form>
